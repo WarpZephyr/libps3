@@ -3,7 +3,7 @@
 namespace libps3
 {
     public class RAP
-	{
+    {
         public static byte[] RapToRif(byte[] rap)
         {
             byte[] rif = CryptoHelper.DecryptAESECB(KeyVault.RAP_KEY, rap);

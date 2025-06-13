@@ -1,10 +1,13 @@
 ﻿// Adapted from RPCS3 C++ to C#
 // Refer to RPCS3 for licensing regarding this code
 
-using BinaryMemory;
+using Edoke.IO;
 using libps3.Compression;
 using libps3.Cryptography;
+using System;
 using System.Buffers.Binary;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace libps3
@@ -69,7 +72,8 @@ namespace libps3
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown hashing algorithm: {hash_mode}");
-            };
+            }
+            ;
         }
 
         private static bool Decrypt(int hash_mode, int crypto_mode, bool version, byte[] input, ref byte[] output, int length, byte[] key, byte[] iv, byte[] hash, byte[] test_hash)
@@ -117,7 +121,7 @@ namespace libps3
             }
         }
 
-        private unsafe static byte[] GetBlockKey(uint block, NPD_HEADER npd)
+        private unsafe static byte[] GetBlockKey(uint block, NpdHeader npd)
         {
             byte[] destKey = (npd.version <= 1) ? new byte[0x10] : npd.headerHash;
 
@@ -176,7 +180,7 @@ namespace libps3
             return (offset, length, compressionEnd);
         }
 
-        private static long DecryptBlock(Stream input, Stream output, NPD_HEADER npd, EDAT_HEADER edat, byte[] key, uint blockNum, uint totalBlocks, ulong sizeLeft)
+        private static long DecryptBlock(Stream input, Stream output, NpdHeader npd, Edatheader edat, byte[] key, uint blockNum, uint totalBlocks, ulong sizeLeft)
         {
             // Get metadata info and setup buffers.
             int metadataSectionSize = ((edat.flags & EDAT_COMPRESSED_FLAG) != 0 || (edat.flags & EDAT_FLAG_0x20) != 0) ? 0x20 : 0x10;
@@ -248,7 +252,7 @@ namespace libps3
 
                 Array.Copy(result, hashResult, 0x10);
                 offset = metadataOffset + ((blockNum * edat.blockSize) + (totalBlocks * metadataSectionSize));
-		        length = edat.blockSize;
+                length = edat.blockSize;
 
                 if (blockNum == (totalBlocks - 1))
                 {
@@ -266,7 +270,7 @@ namespace libps3
 
             byte[] encData = new byte[length];
             byte[] decData = new byte[length];
-            
+
             input.Position = fileOffset + offset;
             if (input.Read(encData) != encData.Length)
             {
@@ -346,7 +350,7 @@ namespace libps3
             }
         }
 
-        private static void DecryptData(Stream input, Stream output, NPD_HEADER npd, EDAT_HEADER edat, byte[] key)
+        private static void DecryptData(Stream input, Stream output, NpdHeader npd, Edatheader edat, byte[] key)
         {
             int totalBlocks = (int)((edat.dataSize + (ulong)edat.blockSize - 1) / (ulong)edat.blockSize);
             ulong sizeLeft = edat.dataSize;
@@ -368,8 +372,8 @@ namespace libps3
         public static void DecryptStream(Stream input, Stream output, byte[] klicensee, byte[] rap, string filename)
         {
             using BinaryStreamReader br = new BinaryStreamReader(input, true);
-            NPD_HEADER npd = new NPD_HEADER(br);
-            EDAT_HEADER edat = new EDAT_HEADER(br);
+            NpdHeader npd = new NpdHeader(br);
+            Edatheader edat = new Edatheader(br);
 
             byte[] key = new byte[16];
             if ((edat.flags & SDAT_FLAG) == SDAT_FLAG)

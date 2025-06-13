@@ -1,4 +1,5 @@
-﻿using BinaryMemory;
+﻿using Edoke.IO;
+using System.IO;
 
 namespace libps3
 {

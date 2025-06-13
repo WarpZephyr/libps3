@@ -1,8 +1,8 @@
-﻿using BinaryMemory;
+﻿using Edoke.IO;
 
 namespace libps3
 {
-    internal readonly struct EDAT_HEADER
+    internal readonly struct Edatheader
     {
         /// <summary>
         /// Flags describing various things, may be several values.
@@ -19,7 +19,7 @@ namespace libps3
         /// </summary>
         public readonly ulong dataSize;
 
-        internal EDAT_HEADER(BinaryStreamReader br)
+        internal Edatheader(BinaryStreamReader br)
         {
             br.BigEndian = true;
             flags = br.ReadUInt32();
@@ -27,7 +27,7 @@ namespace libps3
             dataSize = br.ReadUInt64();
         }
 
-        internal EDAT_HEADER(BinaryMemoryReader br)
+        internal Edatheader(BinaryMemoryReader br)
         {
             br.BigEndian = true;
             flags = br.ReadUInt32();

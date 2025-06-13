@@ -5,6 +5,8 @@
 // Licensed under the terms of the GNU GPL, version 2.0 or later versions.
 // http://www.gnu.org/licenses/gpl-2.0.txt
 
+using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace libps3.Compression
@@ -33,7 +35,7 @@ namespace libps3.Compression
             {
                 *range = val;
                 *c += 31;
-                if (index != null)(*index)++;
+                if (index != null) (*index)++;
                 return 1;
             }
             else
@@ -187,7 +189,7 @@ namespace libps3.Compression
                             } while ((index >> 8) == 0);
 
                             // Save index.
-                            *(int *)start++ = index;
+                            *(int*)start++ = index;
                         }
                         else  // Compressed char stream.
                         {

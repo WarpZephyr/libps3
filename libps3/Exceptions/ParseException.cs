@@ -1,4 +1,6 @@
-﻿namespace libps3.Exceptions
+﻿using System;
+
+namespace libps3.Exceptions
 {
     public class ParseException : Exception
     {

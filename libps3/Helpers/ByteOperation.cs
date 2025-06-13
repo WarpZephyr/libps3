@@ -1,6 +1,8 @@
-﻿namespace libps3
+﻿using System;
+
+namespace libps3
 {
-    public static class ByteOperation
+    internal static class ByteOperation
     {
         public static byte[] XOR(byte[] inputA, byte[] inputB)
         {
@@ -49,7 +51,7 @@
                 return false;
             }
 
-            for (int i = 0; i <  bytesA.Length; i++)
+            for (int i = 0; i < bytesA.Length; i++)
             {
                 if (bytesA[i] != bytesB[i])
                 {

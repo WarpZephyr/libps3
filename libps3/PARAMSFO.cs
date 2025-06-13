@@ -1,5 +1,8 @@
-﻿using BinaryMemory;
+﻿using Edoke.IO;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace libps3
 {
@@ -83,7 +86,7 @@ namespace libps3
             return IsRead(br, out obj);
         }
 
-        public static bool IsRead(Stream stream, [NotNullWhen(true)]  out PARAMSFO? obj)
+        public static bool IsRead(Stream stream, [NotNullWhen(true)] out PARAMSFO? obj)
         {
             using BinaryStreamReader br = new BinaryStreamReader(stream, true);
             return IsRead(br, out obj);
@@ -112,7 +115,7 @@ namespace libps3
         {
             using BinaryStreamWriter bw = new BinaryStreamWriter(true);
             Write(bw);
-            return bw.ToArray();
+            return bw.FinishBytes();
         }
 
         #endregion

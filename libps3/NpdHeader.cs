@@ -1,10 +1,10 @@
-﻿using BinaryMemory;
+﻿using Edoke.IO;
 using libps3.Cryptography;
 using System.Text;
 
 namespace libps3
 {
-    internal readonly struct NPD_HEADER
+    internal readonly struct NpdHeader
     {
         public readonly string magic;
         public readonly uint version;
@@ -17,10 +17,10 @@ namespace libps3
         public readonly ulong activateTime;
         public readonly ulong expireTime;
 
-        internal NPD_HEADER(BinaryStreamReader br)
+        internal NpdHeader(BinaryStreamReader br)
         {
             br.BigEndian = true;
-            magic = br.AssertASCII(4, ["NPD\0", "\0\0\0\0"]);
+            magic = br.AssertASCII(["NPD\0", "\0\0\0\0"]);
             version = br.ReadUInt32();
             license = br.ReadUInt32();
             type = br.ReadUInt32();
@@ -32,10 +32,10 @@ namespace libps3
             expireTime = br.ReadUInt64();
         }
 
-        internal NPD_HEADER(BinaryMemoryReader br)
+        internal NpdHeader(BinaryMemoryReader br)
         {
             br.BigEndian = true;
-            magic = br.AssertASCII(4, ["NPD\0", "\0\0\0\0"]);
+            magic = br.AssertASCII(["NPD\0", "\0\0\0\0"]);
             version = br.ReadUInt32();
             license = br.ReadUInt32();
             type = br.ReadUInt32();
@@ -50,12 +50,12 @@ namespace libps3
         internal byte[] GetHeaderBytes()
         {
             byte[] headerHashBytes = new byte[0x60];
-            var bw = new BinaryMemoryWriter(headerHashBytes, true);
-            bw.WriteFixedASCII(magic, 4);
+            var bw = new BinarySpanWriter(headerHashBytes, true);
+            bw.WriteASCII(magic, 4, 0);
             bw.WriteUInt32(version);
             bw.WriteUInt32(license);
             bw.WriteUInt32(type);
-            bw.WriteFixedASCII(contentID, 48);
+            bw.WriteASCII(contentID, 48, 0);
             bw.WriteBytes(digest);
             bw.WriteBytes(titleHash);
             return headerHashBytes;
