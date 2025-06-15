@@ -168,7 +168,7 @@ namespace libps3
             for (int i = 0; i < count; i++)
             {
                 bw.FillUInt16($"KeyOffset_{i}", (ushort)(bw.Position - keyTableStart));
-                bw.WriteASCII(keys[i], true);
+                bw.WriteUTF8(keys[i], true);
             }
             bw.Pad(4);
 
@@ -182,11 +182,11 @@ namespace libps3
                 switch (format)
                 {
                     case DataFormat.UTF8S:
-                        bw.WriteASCII(parameter.Data, false);
+                        bw.WriteUTF8(parameter.Data, false);
                         bw.WritePattern((int)(parameter.DataMaxLength - parameter.Data.Length), 0);
                         break;
                     case DataFormat.UTF8:
-                        bw.WriteASCII(parameter.Data, true);
+                        bw.WriteUTF8(parameter.Data, true);
                         bw.WritePattern((int)(parameter.DataMaxLength - (parameter.Data.Length + 1)), 0);
                         break;
                     case DataFormat.UInt32:
@@ -234,13 +234,13 @@ namespace libps3
 
                 long end = br.Position;
                 br.Position = keyTableStart + keyOffset;
-                string key = br.ReadASCII();
+                string key = br.ReadUTF8();
 
                 br.Position = dataTableStart + dataOffset;
                 Data = Format switch
                 {
-                    DataFormat.UTF8S => br.ReadASCII((int)dataLength),
-                    DataFormat.UTF8 => br.ReadASCII(),
+                    DataFormat.UTF8S => br.ReadUTF8((int)dataLength),
+                    DataFormat.UTF8 => br.ReadUTF8(),
                     DataFormat.UInt32 => br.ReadUInt32().ToString(),
                     _ => throw new InvalidDataException($"{nameof(DataFormat)} {Format} is not supported or implemented."),
                 };
