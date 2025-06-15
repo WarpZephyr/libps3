@@ -5,7 +5,7 @@ VisualStudioVersion = 17.9.34414.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "libps3", "libps3\libps3.csproj", "{699189F1-4222-4AF9-82C8-BC38DC5EA249}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Edoke", "Edoke\Edoke\Edoke.csproj", "{4F631EC8-1812-2937-823F-01955A795ED2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Edoke", "..\Edoke\Edoke\Edoke.csproj", "{4F631EC8-1812-2937-823F-01955A795ED2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
