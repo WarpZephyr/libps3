@@ -17,7 +17,6 @@ For licensing regarding the use of that code, refer to RPCS3 and its licensing u
 # Building
 If you want to build the project you should clone it with these commands in git bash in a folder of your choosing:  
 ```
-git clone https://github.com/WarpZephyr/Edoke.git  
-git clone https://github.com/WarpZephyr/libps3.git  
+git clone --recursive https://github.com/WarpZephyr/libps3.git  
 ```
 Dependencies are subject to possibly change if improvements are made or they are better standardized.

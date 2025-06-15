@@ -5,7 +5,7 @@ VisualStudioVersion = 17.9.34414.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "libps3", "libps3\libps3.csproj", "{699189F1-4222-4AF9-82C8-BC38DC5EA249}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Edoke", "..\Edoke\Edoke\Edoke.csproj", "{CC121821-EAAD-A644-3F31-00EF605F8BB4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Edoke", "Edoke\Edoke\Edoke.csproj", "{4F631EC8-1812-2937-823F-01955A795ED2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{699189F1-4222-4AF9-82C8-BC38DC5EA249}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{699189F1-4222-4AF9-82C8-BC38DC5EA249}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{699189F1-4222-4AF9-82C8-BC38DC5EA249}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CC121821-EAAD-A644-3F31-00EF605F8BB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CC121821-EAAD-A644-3F31-00EF605F8BB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CC121821-EAAD-A644-3F31-00EF605F8BB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CC121821-EAAD-A644-3F31-00EF605F8BB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F631EC8-1812-2937-823F-01955A795ED2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F631EC8-1812-2937-823F-01955A795ED2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F631EC8-1812-2937-823F-01955A795ED2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F631EC8-1812-2937-823F-01955A795ED2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
