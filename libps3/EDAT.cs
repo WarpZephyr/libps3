@@ -180,7 +180,7 @@ namespace libps3
             return (offset, length, compressionEnd);
         }
 
-        private static long DecryptBlock(Stream input, Stream output, NpdHeader npd, Edatheader edat, byte[] key, uint blockNum, uint totalBlocks, ulong sizeLeft)
+        private static long DecryptBlock(Stream input, Stream output, NpdHeader npd, EdatHeader edat, byte[] key, uint blockNum, uint totalBlocks, ulong sizeLeft)
         {
             // Get metadata info and setup buffers.
             int metadataSectionSize = ((edat.flags & EDAT_COMPRESSED_FLAG) != 0 || (edat.flags & EDAT_FLAG_0x20) != 0) ? 0x20 : 0x10;
@@ -350,7 +350,7 @@ namespace libps3
             }
         }
 
-        private static void DecryptData(Stream input, Stream output, NpdHeader npd, Edatheader edat, byte[] key)
+        private static void DecryptData(Stream input, Stream output, NpdHeader npd, EdatHeader edat, byte[] key)
         {
             int totalBlocks = (int)((edat.dataSize + (ulong)edat.blockSize - 1) / (ulong)edat.blockSize);
             ulong sizeLeft = edat.dataSize;
@@ -373,7 +373,7 @@ namespace libps3
         {
             using BinaryStreamReader br = new BinaryStreamReader(input, true);
             NpdHeader npd = new NpdHeader(br);
-            Edatheader edat = new Edatheader(br);
+            EdatHeader edat = new EdatHeader(br);
 
             byte[] key = new byte[16];
             if ((edat.flags & SDAT_FLAG) == SDAT_FLAG)

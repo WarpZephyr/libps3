@@ -2,7 +2,7 @@
 
 namespace libps3
 {
-    internal readonly struct Edatheader
+    internal readonly struct EdatHeader
     {
         /// <summary>
         /// Flags describing various things, may be several values.
@@ -19,7 +19,7 @@ namespace libps3
         /// </summary>
         public readonly ulong dataSize;
 
-        internal Edatheader(BinaryStreamReader br)
+        internal EdatHeader(BinaryStreamReader br)
         {
             br.BigEndian = true;
             flags = br.ReadUInt32();
@@ -27,7 +27,7 @@ namespace libps3
             dataSize = br.ReadUInt64();
         }
 
-        internal Edatheader(BinaryMemoryReader br)
+        internal EdatHeader(BinaryMemoryReader br)
         {
             br.BigEndian = true;
             flags = br.ReadUInt32();
