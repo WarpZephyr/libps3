@@ -28,6 +28,6 @@ namespace libps3
         #endregion
 
         private static bool Is(BinaryStreamReader br)
-            => br.Length >= 128 && br.ReadASCII(4) == "NPD\0";
+            => br.Length >= 128 && br.ReadASCII(4, false) == "NPD\0";
     }
 }

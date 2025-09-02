@@ -123,7 +123,7 @@ namespace libps3
         private static bool Is(BinaryStreamReader br)
         {
             br.BigEndian = true;
-            return br.Length >= 20 && br.GetASCII(br.Position, 4) == "\0PSF";
+            return br.Length >= 20 && br.GetASCII(br.Position, 4, false) == "\0PSF";
         }
 
         private static PARAMSFO Read(BinaryStreamReader br)
