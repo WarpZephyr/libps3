@@ -24,7 +24,7 @@ namespace libps3
             version = br.ReadUInt32();
             license = br.ReadUInt32();
             type = br.ReadUInt32();
-            contentID = br.ReadASCII(48);
+            contentID = br.ReadASCII(48, false);
             digest = br.ReadBytes(16);
             titleHash = br.ReadBytes(16);
             headerHash = br.ReadBytes(16);
@@ -39,7 +39,7 @@ namespace libps3
             version = br.ReadUInt32();
             license = br.ReadUInt32();
             type = br.ReadUInt32();
-            contentID = br.ReadASCII(48);
+            contentID = br.ReadASCII(48, false);
             digest = br.ReadBytes(16);
             titleHash = br.ReadBytes(16);
             headerHash = br.ReadBytes(16);
