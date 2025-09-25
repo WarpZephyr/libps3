@@ -1,5 +1,6 @@
 ﻿using Edoke.IO;
 using libps3.Cryptography;
+using libps3.Helpers;
 using System;
 using System.Diagnostics;
 using System.IO;

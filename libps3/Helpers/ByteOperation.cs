@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-namespace libps3
+namespace libps3.Helpers
 {
     internal static class ByteOperation
     {

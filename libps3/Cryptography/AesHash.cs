@@ -1,4 +1,5 @@
-﻿using System;
+﻿using libps3.Helpers;
+using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
