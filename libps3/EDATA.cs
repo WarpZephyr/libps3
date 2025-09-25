@@ -137,23 +137,23 @@ namespace libps3
             /// <summary>
             /// No flags.
             /// </summary>
-            None         = 0 << 0,
+            None = 0 << 0,
 
             /// <summary>
             /// The data is compressed.<br/>
             /// If set, the metadata section size is 32.
             /// </summary>
-            Compressed   = 1 << 0,
+            Compressed = 1 << 0,
 
             /// <summary>
             /// The data is plaintext.
             /// </summary>
-            Plaintext    = 1 << 1,
+            Plaintext = 1 << 1,
 
             /// <summary>
             /// The data is encrypted with AES-CBC-128.
             /// </summary>
-            Encrypted    = 1 << 2,
+            Encrypted = 1 << 2,
 
             /// <summary>
             /// The key is encrypted.
@@ -164,7 +164,7 @@ namespace libps3
             /// Unknown.<br/>
             /// The hashing algorithm will be 16-byte AES-CMAC.
             /// </summary>
-            UNK_4        = 1 << 4,
+            UNK_4 = 1 << 4,
 
             /// <summary>
             /// Unknown.<br/>
@@ -178,12 +178,12 @@ namespace libps3
             /// <summary>
             /// The data is SDATA and not EDATA.
             /// </summary>
-            Sdata        = 1 << 30,
+            Sdata = 1 << 30,
 
             /// <summary>
             /// The data is not finalized.
             /// </summary>
-            Debug        = 1 << 31
+            Debug = 1 << 31
         }
 
         #endregion

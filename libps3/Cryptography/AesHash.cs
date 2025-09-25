@@ -12,7 +12,7 @@ namespace libps3.Cryptography
         // https://stackoverflow.com/a/30123190
         // https://github.com/elektronika-ba/tiny-AES-CMAC-c/blob/master/aes_cmac.c
         #region Aes Cmac
-        
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void GenerateCmacSubKeys(ReadOnlySpan<byte> key, Span<byte> K1, Span<byte> K2)

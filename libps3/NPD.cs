@@ -2,7 +2,6 @@
 using libps3.Cryptography;
 using libps3.Helpers;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
