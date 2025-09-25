@@ -62,10 +62,10 @@ namespace libps3
         }
 
         internal byte[] HashTitle(string filename)
-            => CryptoHelper.AESCMAC(KeyVault.NP_TITLE_OMAC_KEY, new ASCIIEncoding().GetBytes(contentID + filename));
+            => CryptoHelper.ComputeAesCmac(KeyVault.NP_TITLE_OMAC_KEY, new ASCIIEncoding().GetBytes(contentID + filename));
 
         internal byte[] HashHeader(byte[] klicensee)
-            => CryptoHelper.AESCMAC(ByteOperation.XOR(klicensee, KeyVault.NP_HEADER_OMAC_KEY), GetHeaderBytes());
+            => CryptoHelper.ComputeAesCmac(ByteOperation.Xor(klicensee, KeyVault.NP_HEADER_OMAC_KEY), GetHeaderBytes());
 
         public bool TitleHashValid(string filename)
             => ByteOperation.EqualTo(HashTitle(filename), titleHash);

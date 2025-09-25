@@ -1,24 +1,31 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace libps3.Cryptography
 {
     internal static class CryptoHelper
     {
-        internal static byte[] DecryptAESCBC(byte[] key, byte[] data)
-            => DecryptAES(key, data, CipherMode.CBC, PaddingMode.None);
+        #region Decrypt
 
-        internal static byte[] DecryptAESCBC(byte[] key, byte[] iv, byte[] data)
-            => DecryptAES(key, iv, data, CipherMode.CBC, PaddingMode.None);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] DecryptAesCbc(byte[] key, byte[] data)
+            => DecryptAes(key, data, CipherMode.CBC, PaddingMode.None);
 
-        internal static byte[] DecryptAESECB(byte[] key, byte[] data)
-            => DecryptAES(key, data, CipherMode.ECB, PaddingMode.None);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] DecryptAesCbc(byte[] key, byte[] iv, byte[] data)
+            => DecryptAes(key, iv, data, CipherMode.CBC, PaddingMode.None);
 
-        internal static byte[] DecryptAESECB(byte[] key, byte[] iv, byte[] data)
-            => DecryptAES(key, iv, data, CipherMode.ECB, PaddingMode.None);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] DecryptAesEcb(byte[] key, byte[] data)
+            => DecryptAes(key, data, CipherMode.ECB, PaddingMode.None);
 
-        internal static byte[] DecryptAES(byte[] key, byte[] iv, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] DecryptAesEcb(byte[] key, byte[] iv, byte[] data)
+            => DecryptAes(key, iv, data, CipherMode.ECB, PaddingMode.None);
+
+        internal static byte[] DecryptAes(byte[] key, byte[] iv, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
         {
             using var aes = Aes.Create();
             aes.Mode = cipherMode;
@@ -27,7 +34,7 @@ namespace libps3.Cryptography
             return decryptor.TransformFinalBlock(data, 0, data.Length);
         }
 
-        internal static byte[] DecryptAES(byte[] key, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
+        internal static byte[] DecryptAes(byte[] key, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
         {
             using var aes = Aes.Create();
             aes.Mode = cipherMode;
@@ -37,19 +44,27 @@ namespace libps3.Cryptography
             return decryptor.TransformFinalBlock(data, 0, data.Length);
         }
 
-        internal static byte[] EncryptAESCBC(byte[] key, byte[] data)
-            => EncryptAES(key, data, CipherMode.CBC, PaddingMode.None);
+        #endregion
 
-        internal static byte[] EncryptAESCBC(byte[] key, byte[] iv, byte[] data)
-            => EncryptAES(key, iv, data, CipherMode.CBC, PaddingMode.None);
+        #region Encrypt
 
-        internal static byte[] EncryptAESECB(byte[] key, byte[] data)
-            => EncryptAES(key, data, CipherMode.ECB, PaddingMode.None);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] EncryptAesCbc(byte[] key, byte[] data)
+            => EncryptAes(key, data, CipherMode.CBC, PaddingMode.None);
 
-        internal static byte[] EncryptAESECB(byte[] key, byte[] iv, byte[] data)
-            => EncryptAES(key, iv, data, CipherMode.ECB, PaddingMode.None);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] EncryptAesCbc(byte[] key, byte[] iv, byte[] data)
+            => EncryptAes(key, iv, data, CipherMode.CBC, PaddingMode.None);
 
-        internal static byte[] EncryptAES(byte[] key, byte[] iv, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] EncryptAesEcb(byte[] key, byte[] data)
+            => EncryptAes(key, data, CipherMode.ECB, PaddingMode.None);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte[] EncryptAesEcb(byte[] key, byte[] iv, byte[] data)
+            => EncryptAes(key, iv, data, CipherMode.ECB, PaddingMode.None);
+
+        internal static byte[] EncryptAes(byte[] key, byte[] iv, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
         {
             using var aes = Aes.Create();
             aes.Mode = cipherMode;
@@ -58,7 +73,7 @@ namespace libps3.Cryptography
             return encryptor.TransformFinalBlock(data, 0, data.Length);
         }
 
-        internal static byte[] EncryptAES(byte[] key, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
+        internal static byte[] EncryptAes(byte[] key, byte[] data, CipherMode cipherMode, PaddingMode paddingMode)
         {
             using var aes = Aes.Create();
             aes.Mode = cipherMode;
@@ -67,6 +82,10 @@ namespace libps3.Cryptography
             using var encryptor = aes.CreateEncryptor();
             return encryptor.TransformFinalBlock(data, 0, data.Length);
         }
+
+        #endregion
+
+        #region Aes Cmac
 
         // https://stackoverflow.com/a/30123190
         private static byte[] LeftShiftOneBit(byte[] bytes)
@@ -85,11 +104,11 @@ namespace libps3.Cryptography
         }
 
         // https://stackoverflow.com/a/30123190
-        internal static byte[] AESCMAC(byte[] key, byte[] input)
+        internal static byte[] ComputeAesCmac(byte[] key, byte[] input)
         {
             // SubKey generation
             // step 1, AES-128 with key K is applied to an all-zero input block.
-            byte[] L = EncryptAESCBC(key, new byte[16], new byte[16]);
+            byte[] L = EncryptAesCbc(key, new byte[16], new byte[16]);
 
             // step 2, K1 is derived through the following operation:
             byte[] K1 = LeftShiftOneBit(L); //If the most significant bit of L is equal to 0, K1 is the left-shift of L by 1 bit.
@@ -123,21 +142,29 @@ namespace libps3.Cryptography
             }
 
             // The result of the previous process will be the input of the last encryption.
-            byte[] encResult = EncryptAESCBC(key, new byte[16], input);
+            byte[] encResult = EncryptAesCbc(key, new byte[16], input);
+            byte[] hashValue = new byte[16];
+            Array.Copy(encResult, encResult.Length - hashValue.Length, hashValue, 0, hashValue.Length);
 
-            byte[] HashValue = new byte[16];
-            Array.Copy(encResult, encResult.Length - HashValue.Length, HashValue, 0, HashValue.Length);
-
-            return HashValue;
+            return hashValue;
         }
 
-        internal static bool CompareAESCMAC(byte[] key, byte[] input, byte[] hash)
-            => AESCMAC(key, input).SequenceEqual(hash);
+        internal static bool CompareAesCmac(byte[] key, byte[] input, byte[] hash)
+            => ComputeAesCmac(key, input).SequenceEqual(hash);
 
-        internal static byte[] SHA1HMAC(byte[] key, byte[] input)
-            => new HMACSHA1(key).ComputeHash(input);
+        #endregion
 
-        internal static bool CompareSHA1HMAC(byte[] key, byte[] input, byte[] hash)
-            => SHA1HMAC(key, input).SequenceEqual(hash);
+        #region Sha1 Hmac
+
+        internal static byte[] ComputeSha1Hmac(byte[] key, byte[] input)
+        {
+            using var hmac = new HMACSHA1(key);
+            return hmac.ComputeHash(input);
+        }
+
+        internal static bool CompareSha1Hmac(byte[] key, byte[] input, byte[] hash)
+            => ComputeSha1Hmac(key, input).SequenceEqual(hash);
+
+        #endregion
     }
 }
