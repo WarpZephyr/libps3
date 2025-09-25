@@ -155,9 +155,9 @@ namespace libps3
             Plaintext = 1 << 1,
 
             /// <summary>
-            /// The data is encrypted with AES-CBC-128.
+            /// Unknown.
             /// </summary>
-            Encrypted = 1 << 2,
+            UNK_2 = 1 << 2,
 
             /// <summary>
             /// The key is encrypted.
@@ -329,6 +329,8 @@ namespace libps3
         {
             NPD = new NPD(br);
             Flags = (EdataFlags)br.ReadInt32();
+            CheckFlagsVersion();
+
             _BlockSize = br.ReadInt32();
             DataSize = br.ReadInt32();
             MetadataHash = br.ReadBytes(16);
@@ -365,6 +367,8 @@ namespace libps3
         {
             NPD = new NPD(ref br);
             Flags = (EdataFlags)br.ReadInt32();
+            CheckFlagsVersion();
+
             _BlockSize = br.ReadInt32();
             DataSize = br.ReadInt64();
             MetadataHash = br.ReadBytes(16);
@@ -607,7 +611,7 @@ namespace libps3
             }
         }
 
-        private bool DecryptData(Span<byte> key, Span<byte> iv, Span<byte> hashKey, Span<byte> hash, Span<byte> data, bool isEncrypted, bool isUnk4)
+        private bool DecryptData(Span<byte> key, Span<byte> iv, Span<byte> hashKey, Span<byte> hash, Span<byte> data, bool isPlaintext, bool isUnk4)
         {
             // Decrypt the key and hash
             DecryptKeyHash(key);
@@ -628,7 +632,7 @@ namespace libps3
             if (result)
             {
                 // Decrypt the block data
-                if (isEncrypted)
+                if (!isPlaintext)
                 {
                     AesCrypto.DecryptCbc(data, key, iv);
                 }
@@ -639,19 +643,21 @@ namespace libps3
 
         public void Decrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream output)
         {
+            CheckFlagsVersion();
+
             // Get decryption key
             Span<byte> key = stackalloc byte[KeySize];
             GetDecryptionKey(filename, klicensee, rap, key);
 
             // Decrypt blocks
             // Check flags
+            bool isDebug = IsDebug();
             bool isCompressed = IsCompressed();
+            bool isPlaintext = IsPlaintext();
+            bool isUnk2 = (Flags & EdataFlags.UNK_2) != 0;
+            bool isKeyEncrypted = IsKeyEncrypted();
             bool isUnk4 = (Flags & EdataFlags.UNK_4) != 0;
             bool isUnk5 = (Flags & EdataFlags.UNK_5) != 0;
-            bool isEncrypted = IsEncrypted();
-            bool isKeyEncrypted = IsKeyEncrypted();
-            bool isDebug = IsDebug();
-            bool isPlaintext = IsPlaintext();
 
             // Calculate sizes
             int numBlocks = (int)((DataSize + BlockSize - 1) / BlockSize);
@@ -784,7 +790,7 @@ namespace libps3
                 // Decrypt in-place if necessary
                 if (!isDebug)
                 {
-                    if (!DecryptData(encBlockKey, iv, hashKey, hash, data, isEncrypted, isUnk4))
+                    if (!DecryptData(encBlockKey, iv, hashKey, hash, data, isPlaintext, isUnk4))
                     {
                         throw new Exception($"Decryption of block {blockIndex} failed.");
                     }
@@ -814,6 +820,12 @@ namespace libps3
 
         public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input)
         {
+            // Ensure flags, version, and NPD are usable without secretly modifying user state.
+            // Notify the user to fix their errors before continuing.
+            CheckFlagsVersion();
+            if (!NPD.IsValid(filename, klicensee))
+                throw new InvalidOperationException($"{nameof(NPD)} is not valid for the given \"{nameof(filename)}\" and \"{nameof(klicensee)}\", please update it if applicable before calling \"{nameof(Encrypt)}\".");
+
             throw new NotImplementedException("Encryption is not yet implemented.");
         }
 
@@ -885,12 +897,61 @@ namespace libps3
             => (Flags & EdataFlags.Plaintext) != 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IsEncrypted()
-            => (Flags & EdataFlags.Encrypted) != 0;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsKeyEncrypted()
             => (Flags & EdataFlags.EncryptedKey) != 0;
+
+        private void CheckFlagsVersion()
+        {
+            void NotSupported(EdataFlags unsupportedFlag)
+            {
+                bool hasFlag = (Flags & unsupportedFlag) != 0;
+                if (hasFlag)
+                    throw new InvalidDataException($"{nameof(EdataFlags)} \"{unsupportedFlag}\" is not supported in version: \"{NPD.Version}\"");
+            }
+
+            void Required(EdataFlags requiredFlag)
+            {
+                bool hasFlag = (Flags & requiredFlag) != 0;
+                if (!hasFlag)
+                    throw new InvalidDataException($"{nameof(EdataFlags)} \"{requiredFlag}\" is required in version: \"{NPD.Version}\"");
+            }
+
+            void Exclusive(EdataFlags flag, EdataFlags incompatibleFlag)
+            {
+                bool hasFlag = (Flags & flag) != 0;
+                bool hasIncompatibleFlag = (Flags & incompatibleFlag) != 0;
+                bool exclusiveError = hasFlag && hasIncompatibleFlag;
+                if (exclusiveError)
+                    throw new InvalidDataException($"{nameof(EdataFlags)} \"{flag}\" is not compatible with \"{incompatibleFlag}\" in version: \"{NPD.Version}\"");
+            }
+
+            switch (NPD.Version)
+            {
+                case 1:
+                    NotSupported(EdataFlags.Sdata);
+                    NotSupported(EdataFlags.UNK_2);
+                    NotSupported(EdataFlags.EncryptedKey);
+                    NotSupported(EdataFlags.UNK_4);
+                    NotSupported(EdataFlags.UNK_5);
+                    break;
+                case 2:
+                    Required(EdataFlags.UNK_2);
+                    Required(EdataFlags.EncryptedKey);
+                    NotSupported(EdataFlags.UNK_4);
+                    NotSupported(EdataFlags.UNK_5);
+                    break;
+                case 3:
+                case 4:
+                    Required(EdataFlags.UNK_2);
+                    Required(EdataFlags.EncryptedKey);
+                    Exclusive(EdataFlags.Compressed, EdataFlags.UNK_4);
+                    Exclusive(EdataFlags.Compressed, EdataFlags.UNK_5);
+                    break;
+                case 0: // Unclear if this is really even supported
+                default:
+                    throw new NotSupportedException($"Unknown EDATA version: \"{NPD.Version}\".");
+            }
+        }
 
         #endregion
 
