@@ -117,6 +117,11 @@ namespace libps3
         /// </summary>
         public const string DefaultPackagerVersion = PackagerVersionEdata400W;
 
+        /// <summary>
+        /// The decryption key size.
+        /// </summary>
+        private const int KeySize = 16;
+
         #endregion
 
         #region EdataFlags
@@ -631,7 +636,7 @@ namespace libps3
         public void Decrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream output)
         {
             // Get decryption key
-            Span<byte> key = stackalloc byte[16];
+            Span<byte> key = stackalloc byte[KeySize];
             GetDecryptionKey(filename, klicensee, rap, key);
 
             // Decrypt blocks

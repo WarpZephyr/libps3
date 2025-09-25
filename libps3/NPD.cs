@@ -266,7 +266,7 @@ namespace libps3
         /// <param name="br">The <see cref="Stream"/> reader.</param>
         /// <returns>Whether or not the specified <see cref="Stream"/> appears to be an <see cref="NPD"/>.</returns>
         internal static bool Is(BinaryStreamReader br)
-            => br.GetASCII(0, 4) == "NPD\0";
+            => br.GetASCII(0, 4, false) == "NPD\0";
 
         /// <summary>
         /// Whether or not the specified bytes appear to be an <see cref="NPD"/>.
@@ -274,7 +274,7 @@ namespace libps3
         /// <param name="br">The byte reader.</param>
         /// <returns>Whether or not the specified bytes appear to be an <see cref="NPD"/>.</returns>
         internal static bool Is(BinarySpanReader br)
-            => br.GetASCII(0, 4) == "NPD\0";
+            => br.GetASCII(0, 4, false) == "NPD\0";
 
         /// <summary>
         /// Whether or not the specified file appears to be an <see cref="NPD"/>.
@@ -399,10 +399,7 @@ namespace libps3
         #region Decryption
 
         internal void GetSdataKey(Span<byte> output)
-        {
-            Debug.Assert(output.Length >= HeaderHashSize, $"The output buffer should be at least {HeaderHashSize} in length.");
-            ByteOperation.Xor(HeaderHash, KeyVault.SDAT_KEY, output);
-        }
+            => ByteOperation.Xor(HeaderHash, KeyVault.SDAT_KEY, output);
 
         /// <summary>
         /// Calculates a key required to decrypt the specified block.
@@ -411,8 +408,6 @@ namespace libps3
         /// <param name="output">The output buffer for the block key.</param>
         internal void GetBlockKey(int blockIndex, Span<byte> output)
         {
-            Debug.Assert(output.Length >= BlockKeySize, $"The output buffer should be at least {BlockKeySize} in length.");
-
             if (Version <= 1)
             {
                 // When version is 1 the first 12 bytes of the block key are 0
