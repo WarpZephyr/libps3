@@ -1,4 +1,8 @@
-﻿using Edoke.IO;
+﻿// Note:
+// The algorithms used for this code are largely adapted from make_npdata.
+// Licensing for this code may fall under the license of make_npdata.
+
+using Edoke.IO;
 using libps3.Compression;
 using libps3.Cryptography;
 using System;

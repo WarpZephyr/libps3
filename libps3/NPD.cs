@@ -1,4 +1,8 @@
-﻿using Edoke.IO;
+﻿// Note:
+// The cryptography algorithms used in this code, such as "GetBlockKey", are largely adapted from make_npdata.
+// Licensing for these sections of code may fall under the license of make_npdata.
+
+using Edoke.IO;
 using libps3.Cryptography;
 using libps3.Helpers;
 using System;
