@@ -810,7 +810,7 @@ namespace libps3
 
         public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input)
         {
-
+            throw new NotImplementedException("Encryption is not yet implemented.");
         }
 
         #endregion
