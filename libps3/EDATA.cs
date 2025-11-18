@@ -5,8 +5,10 @@
 using Edoke.IO;
 using libps3.Compression;
 using libps3.Cryptography;
+using libps3.Helpers;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -122,9 +124,54 @@ namespace libps3
         public const string DefaultPackagerVersion = PackagerVersionEdata400W;
 
         /// <summary>
+        /// The default flags for version 1.
+        /// </summary>
+        public const EdataFlags DefaultFlags1 = EdataFlags.None;
+
+        /// <summary>
+        /// The default flags for version 2.
+        /// </summary>
+        public const EdataFlags DefaultFlags2 = EdataFlags.UNK_2 | EdataFlags.EncryptedKey;
+
+        /// <summary>
+        /// The default flags for version 3.
+        /// </summary>
+        public const EdataFlags DefaultFlags3 = DefaultFlags2 | EdataFlags.UNK_4 | EdataFlags.UNK_5;
+
+        /// <summary>
+        /// The default flags for version 4.
+        /// </summary>
+        public const EdataFlags DefaultFlags4 = DefaultFlags3;
+
+        /// <summary>
+        /// The possible flags for version 1, including mutually exclusive ones.
+        /// </summary>
+        private const EdataFlags PossibleFlags1 = DefaultFlags1 | EdataFlags.Compressed | EdataFlags.Debug;
+
+        /// <summary>
+        /// The possible flags for version 2, including mutually exclusive ones.
+        /// </summary>
+        private const EdataFlags PossibleFlags2 = DefaultFlags2 | EdataFlags.Compressed | EdataFlags.Plaintext | EdataFlags.Sdata | EdataFlags.Debug;
+
+        /// <summary>
+        /// The possible flags for version 3, including mutually exclusive ones.
+        /// </summary>
+        private const EdataFlags PossibleFlags3 = DefaultFlags3 | EdataFlags.Compressed | EdataFlags.Plaintext | EdataFlags.Sdata | EdataFlags.Debug;
+
+        /// <summary>
+        /// The possible flags for version 4, including mutually exclusive ones.
+        /// </summary>
+        private const EdataFlags PossibleFlags4 = PossibleFlags3;
+
+        /// <summary>
         /// The decryption key size.
         /// </summary>
         private const int KeySize = 16;
+
+        /// <summary>
+        /// The size of the entire EDATA header.
+        /// </summary>
+        private const int EdataHeaderSize = 256;
 
         #endregion
 
@@ -291,12 +338,22 @@ namespace libps3
         /// <summary>
         /// A <see cref="Stream"/> containing the encrypted data.
         /// </summary>
-        private Stream EncryptedData { get; set; }
+        private Stream Data;
 
         /// <summary>
         /// Whether or not this <see cref="EDATA"/> is disposed.
         /// </summary>
         private bool disposedValue;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        /// Data size is greater than the maximum size of arrays.
+        /// </summary>
+        public bool IsLargeData
+            => DataSize > int.MaxValue;
 
         #endregion
 
@@ -308,7 +365,7 @@ namespace libps3
         public EDATA()
         {
             NPD = new NPD();
-            Flags = EdataFlags.None;
+            Flags = DefaultFlags4;
             _BlockSize = DefaultBlockSize;
             DataSize = 0;
             MetadataHash = new byte[16];
@@ -318,18 +375,19 @@ namespace libps3
             _Footer = DefaultPackagerVersion;
             HasFooter = true;
 
-            EncryptedData = new MemoryStream();
+            Data = new MemoryStream();
         }
 
         /// <summary>
         /// Reads an <see cref="EDATA"/> from a <see cref="Stream"/>.
         /// </summary>
         /// <param name="br">The <see cref="Stream"/> reader.</param>
-        private EDATA(BinaryStreamReader br)
+        /// <param name="leaveOpen">Whether or not to leave the underlying data stream open when disposing.</param>
+        private EDATA(BinaryStreamReader br, bool leaveOpen)
         {
             NPD = new NPD(br);
             Flags = (EdataFlags)br.ReadInt32();
-            CheckFlagsVersion();
+            CheckFlags();
 
             _BlockSize = br.ReadInt32();
             DataSize = br.ReadInt32();
@@ -355,8 +413,7 @@ namespace libps3
                 HasFooter = false;
             }
 
-            // Do not dispose of incoming reader stream
-            EncryptedData = new SubStream(br.BaseStream, br.Position, length);
+            Data = new SubStream(br.BaseStream, br.Position, length, leaveOpen);
         }
 
         /// <summary>
@@ -367,7 +424,7 @@ namespace libps3
         {
             NPD = new NPD(ref br);
             Flags = (EdataFlags)br.ReadInt32();
-            CheckFlagsVersion();
+            CheckFlags();
 
             _BlockSize = br.ReadInt32();
             DataSize = br.ReadInt64();
@@ -394,7 +451,7 @@ namespace libps3
             }
 
             byte[] bytes = br.ReadBytes(length);
-            EncryptedData = new MemoryStream(bytes, false);
+            Data = new MemoryStream(bytes, false);
         }
 
         #endregion
@@ -459,7 +516,7 @@ namespace libps3
         public static EDATA Read(string path)
         {
             using var br = new BinaryStreamReader(path, true);
-            return new EDATA(br);
+            return new EDATA(br, false);
         }
 
         /// <summary>
@@ -481,7 +538,7 @@ namespace libps3
         public static EDATA Read(Stream stream)
         {
             using var br = new BinaryStreamReader(stream, true, true);
-            return new EDATA(br);
+            return new EDATA(br, true);
         }
 
         #endregion 
@@ -494,7 +551,7 @@ namespace libps3
         /// <param name="bw">The <see cref="Stream"/> writer.</param>
         internal void Write(BinaryStreamWriter bw)
         {
-            NPD.Write(bw);
+            NPD.Write(bw, IsDebug());
             bw.WriteInt32((int)Flags);
             bw.WriteInt32(_BlockSize);
             bw.WriteInt64(DataSize);
@@ -503,16 +560,18 @@ namespace libps3
             bw.WriteBytes(EcdsaMetadataSignature);
             bw.WriteBytes(EcdsaHeaderSignature);
 
-            EncryptedData.CopyTo(bw.BaseStream);
-            if (EncryptedData.CanSeek)
-            {
-                EncryptedData.Seek(0, SeekOrigin.Begin);
-            }
-
+            Data.CopyTo(bw.BaseStream);
             if (!(!HasFooter && (NPD.Version == 0 || NPD.Version == 1)))
             {
                 bw.WriteASCII(Footer, 16);
             }
+
+            if (!Data.CanSeek)
+            {
+                throw new Exception("Cannot seek encrypted data back to start.");
+            }
+
+            Data.Seek(0, SeekOrigin.Begin);
         }
 
         /// <summary>
@@ -548,14 +607,50 @@ namespace libps3
 
         #endregion
 
-        #region Decrypt
+        #region Crypto
 
-        private void GetDecryptionKey(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Span<byte> key)
+        /// <summary>
+        /// Calculates a decryption key for an SDATA file.
+        /// </summary>
+        /// <param name="output"></param>
+        private void GetSdataKey(Span<byte> output)
+            => ByteOperation.Xor(NPD.HeaderHash, KeyVault.SDAT_KEY, output, KeySize);
+
+        /// <summary>
+        /// Calculates a key required to decrypt the specified block.
+        /// </summary>
+        /// <param name="blockIndex">The index of the block to decrypt.</param>
+        /// <param name="output">The output buffer for the block key.</param>
+        private void GetBlockKey(int blockIndex, Span<byte> output)
+        {
+            if (NPD.Version <= 1)
+            {
+                // When version is 1 the first 12 bytes of the block key are 0
+                for (int i = 0; i < 12; i++)
+                    output[i] = 0;
+            }
+            else
+            {
+                // The first 12 bytes of the block key are the first 12 bytes of the header hash
+                for (int i = 0; i < 12; i++)
+                    output[i] = NPD.HeaderHash[i];
+            }
+
+            // The last 4 bytes of the block key are the block index
+            var br = new BinarySpanWriter(output, true)
+            {
+                Position = 12
+            };
+
+            br.WriteInt32(blockIndex);
+        }
+
+        private void GetCryptoKey(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Span<byte> key)
         {
             if (IsSdata())
             {
                 // We need to use the SDATA key
-                NPD.GetSdataKey(key);
+                GetSdataKey(key);
                 return;
             }
 
@@ -573,11 +668,20 @@ namespace libps3
                 return;
             }
 
-            // For non-free EDATA, return the rif key.
+            // For non-free EDATA, return the rif key
             RAP.RapToRif(rap, key);
         }
 
-        private static void DecryptMetadataSection(Span<byte> metadata, Span<byte> decryptedMetadata)
+        #endregion
+
+        #region Decrypt
+
+        /// <summary>
+        /// Decrypts a metadata section.
+        /// </summary>
+        /// <param name="metadata">The metadata to decrypt.</param>
+        /// <param name="decryptedMetadata">An output for the encrypted metadata.</param>
+        private static void DecryptMetadataSection(ReadOnlySpan<byte> metadata, Span<byte> decryptedMetadata)
         {
             decryptedMetadata[0] = (byte)(metadata[12] ^ metadata[8] ^ metadata[16]);
             decryptedMetadata[1] = (byte)(metadata[13] ^ metadata[9] ^ metadata[17]);
@@ -597,6 +701,10 @@ namespace libps3
             decryptedMetadata[15] = (byte)(metadata[7] ^ metadata[3] ^ metadata[31]);
         }
 
+        /// <summary>
+        /// Decrypts either a key or a hash.
+        /// </summary>
+        /// <param name="keyHash">The key or hash to decrypt.</param>
         private void DecryptKeyHash(Span<byte> keyHash)
         {
             if (IsKeyEncrypted())
@@ -611,6 +719,17 @@ namespace libps3
             }
         }
 
+        /// <summary>
+        /// Decrypts the specified data with the specified parameters.
+        /// </summary>
+        /// <param name="key">The key to decrypt with.</param>
+        /// <param name="iv">The IV to decrypt with.</param>
+        /// <param name="hashKey">The key to decrypt the hash with.</param>
+        /// <param name="hash">The hash to test the data integrity.</param>
+        /// <param name="data">The data to decrypt.</param>
+        /// <param name="isPlaintext">Whether or not the data is plaintext.</param>
+        /// <param name="isUnk4">Whether or not the <see cref="EdataFlags.UNK_4"/> flag was set.</param>
+        /// <returns>The result of the hash check.</returns>
         private bool DecryptData(Span<byte> key, Span<byte> iv, Span<byte> hashKey, Span<byte> hash, Span<byte> data, bool isPlaintext, bool isUnk4)
         {
             // Decrypt the key and hash
@@ -641,13 +760,24 @@ namespace libps3
             return result;
         }
 
+        /// <summary>
+        /// Decrypts the content within the <see cref="EDATA"/> to the output <see cref="Stream"/>.<br/>
+        /// If the NPD or EDATA properties are modified before calling decrypt, invalid state may cause errors to occur.<br/>
+        /// Decrypting does not modify the underlying data.
+        /// </summary>
+        /// <param name="filename">The file name of the content.</param>
+        /// <param name="klicensee">The dev klicensee of the content.</param>
+        /// <param name="rap">The rap key of the content.</param>
+        /// <param name="output">The <see cref="Stream"/> to output decrypted content to.</param>
+        /// <exception cref="Exception">Decryption failed.</exception>
         public void Decrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream output)
         {
-            CheckFlagsVersion();
+            // Check for invalid state
+            CheckFlags();
 
             // Get decryption key
             Span<byte> key = stackalloc byte[KeySize];
-            GetDecryptionKey(filename, klicensee, rap, key);
+            GetCryptoKey(filename, klicensee, rap, key);
 
             // Decrypt blocks
             // Check flags
@@ -664,9 +794,8 @@ namespace libps3
             int metadataSectionSize = (isCompressed || isUnk5) ? 32 : 16;
             long sizeLeft = DataSize;
 
-            // Setup input and output
-            using var br = new BinaryStreamReader(EncryptedData, true, true);
-            using var bw = new BinaryStreamWriter(output, true, true);
+            // Setup input
+            using var br = new BinaryStreamReader(Data, true, true);
 
             // Setup reusable block buffers
             bool isOldNpd = NPD.Version <= 1;
@@ -730,7 +859,7 @@ namespace libps3
                     for (int i = 0; i < 20; i++)
                         hash[i] = metadata[i];
 
-                    // Apply custom XOR to first 16 bytes of hash if flag 5 is set
+                    // Apply custom XOR to first 16 bytes of hash
                     for (int i = 0; i < 16; i++)
                         hash[i] = (byte)(metadata[i] ^ metadata[i + 16]);
 
@@ -767,16 +896,15 @@ namespace libps3
                 }
 
                 // Decrypt Block Data
-                // Get unpadded length
-                int paddedLength = length;
-                length = (paddedLength + 15) & -16;
+                int blockLength = length;
+                length = (blockLength + 15) & -16; // We need to pad to the nearest 16 byte fixed AES block.
 
-                // Read the unpadded encrypted data
+                // Read the encrypted data
                 br.Position = offset;
                 Span<byte> data = br.ReadBytes(length);
 
                 // Get the block key
-                NPD.GetBlockKey(blockIndex, blockKey);
+                GetBlockKey(blockIndex, blockKey);
 
                 // Encrypt the block key
                 AesCrypto.EncryptEcb(blockKey, key, encBlockKey);
@@ -809,22 +937,93 @@ namespace libps3
                 }
                 else
                 {
-                    output.Write(data[..paddedLength]);
+                    output.Write(data[..blockLength]);
                 }
             }
+        }
+
+        public byte[] Decrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap)
+        {
+            if (IsLargeData)
+            {
+                throw new InvalidOperationException("Data is too large to be decrypted into an array.");
+            }
+
+            using var ms = new MemoryStream();
+            Decrypt(filename, klicensee, rap, ms);
+            return ms.ToArray();
+        }
+
+        public static void DecryptSdata(string sdataPath, string outPath)
+        {
+            using var fs = File.OpenWrite(outPath);
+            DecryptSdata(sdataPath, fs);
+        }
+
+        public static void DecryptSdata(string sdataPath, Stream output)
+        {
+            EDATA sdata = Read(sdataPath);
+            if (!sdata.IsSdata())
+            {
+                throw new InvalidDataException($"File is not SDATA: \"{sdataPath}\"");
+            }
+
+            sdata.Decrypt(string.Empty, [], [], output);
         }
 
         #endregion
 
         #region Encrypt
 
-        public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input)
+        public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input, Stream output, bool leaveOpen)
         {
-            // Ensure flags, version, and NPD are usable without secretly modifying user state.
+            // Ensure flags and version are usable without secretly modifying user state.
             // Notify the user to fix their errors before continuing.
-            CheckFlagsVersion();
-            if (!NPD.IsValid(filename, klicensee))
-                throw new InvalidOperationException($"{nameof(NPD)} is not valid for the given \"{nameof(filename)}\" and \"{nameof(klicensee)}\", please update it if applicable before calling \"{nameof(Encrypt)}\".");
+            CheckFlags();
+
+            // Get the length of the soon to be new data
+            long dataSize = input.Length;
+
+            // Get encryption key
+            Span<byte> key = stackalloc byte[KeySize];
+            GetCryptoKey(filename, klicensee, rap, key);
+
+            // Write a placeholder for the header for now
+            Span<byte> edataHeader = stackalloc byte[EdataHeaderSize];
+            output.Write(edataHeader);
+
+            // Calculate sizes
+            int numBlocks = (int)((dataSize + BlockSize - 1) / BlockSize);
+
+            // Encrypt data and generate metadata
+            int length = 0;
+            long offset = 0;
+            for (int blockIndex = 0; blockIndex < numBlocks; blockIndex++)
+            {
+                // Get the offset and length of the current block
+                offset = blockIndex * BlockSize;
+                length = BlockSize;
+
+                int blockLength = length;
+                length = (blockLength + 15) & -16; // We need to pad to the nearest 16 byte fixed AES block.
+
+                // If we are on the last block and it is not perfectly fit to a blocksize, use it's remaining length as the length.
+                bool isLastBlock = blockIndex == numBlocks - 1;
+                int blocksRemainder = (int)(dataSize % BlockSize);
+                if (isLastBlock && blocksRemainder > 0)
+                    length = blocksRemainder;
+
+
+            }
+
+            // Update these last
+
+            // These hashes aren't exposed to the user anyhow, so updating here should be fine.
+            // However, validation is, so we expose a way to update them.
+            NPD.Update(filename, klicensee);
+
+            // Set the length of the soon to be new data
+            DataSize = dataSize;
 
             throw new NotImplementedException("Encryption is not yet implemented.");
         }
@@ -900,7 +1099,7 @@ namespace libps3
         public bool IsKeyEncrypted()
             => (Flags & EdataFlags.EncryptedKey) != 0;
 
-        private void CheckFlagsVersion()
+        private void CheckFlags()
         {
             void NotSupported(EdataFlags unsupportedFlag)
             {
@@ -925,20 +1124,26 @@ namespace libps3
                     throw new InvalidDataException($"{nameof(EdataFlags)} \"{flag}\" is not compatible with \"{incompatibleFlag}\" in version: \"{NPD.Version}\"");
             }
 
+            // TODO: Flags - These still need more verification through testing
+            EdataFlags possibleFlags;
             switch (NPD.Version)
             {
+                case 0: // Unclear if this is really even supported
                 case 1:
                     NotSupported(EdataFlags.Sdata);
+                    NotSupported(EdataFlags.Plaintext);
                     NotSupported(EdataFlags.UNK_2);
                     NotSupported(EdataFlags.EncryptedKey);
                     NotSupported(EdataFlags.UNK_4);
                     NotSupported(EdataFlags.UNK_5);
+                    possibleFlags = PossibleFlags1;
                     break;
                 case 2:
                     Required(EdataFlags.UNK_2);
                     Required(EdataFlags.EncryptedKey);
                     NotSupported(EdataFlags.UNK_4);
                     NotSupported(EdataFlags.UNK_5);
+                    possibleFlags = PossibleFlags2;
                     break;
                 case 3:
                 case 4:
@@ -946,10 +1151,17 @@ namespace libps3
                     Required(EdataFlags.EncryptedKey);
                     Exclusive(EdataFlags.Compressed, EdataFlags.UNK_4);
                     Exclusive(EdataFlags.Compressed, EdataFlags.UNK_5);
+                    possibleFlags = PossibleFlags3;
                     break;
-                case 0: // Unclear if this is really even supported
                 default:
                     throw new NotSupportedException($"Unknown EDATA version: \"{NPD.Version}\".");
+            }
+
+            var impossibleFlags = ~possibleFlags;
+            bool hasImpossibleFlags = (Flags & impossibleFlags) != EdataFlags.None;
+            if (hasImpossibleFlags)
+            {
+                throw new InvalidDataException($"Invalid or unknown {nameof(EdataFlags)} found for version: \"{NPD.Version}\".");
             }
         }
 
@@ -985,7 +1197,7 @@ namespace libps3
             {
                 if (disposing)
                 {
-                    EncryptedData.Dispose();
+                    Data.Dispose();
                 }
 
                 disposedValue = true;

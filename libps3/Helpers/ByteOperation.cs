@@ -23,7 +23,7 @@ namespace libps3.Helpers
             }
         }
 
-        public static void LeftShiftOneBit(Span<byte> source, Span<byte> destination)
+        public static void LeftShiftOneBit(ReadOnlySpan<byte> source, Span<byte> destination)
         {
             byte carry = 0;
 
@@ -33,6 +33,19 @@ namespace libps3.Helpers
                 destination[i] = (byte)((u & 0x00FF) + carry);
                 carry = (byte)((u & 0xFF00) >> 8);
             }
+        }
+
+        public static bool IsZero(ReadOnlySpan<byte> source)
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (source[i] != 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

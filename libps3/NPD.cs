@@ -1,5 +1,5 @@
 ﻿// Note:
-// The cryptography algorithms used in this code, such as "GetBlockKey", are largely adapted from make_npdata.
+// The cryptography algorithms used in this code are largely adapted from make_npdata.
 // Licensing for these sections of code may fall under the license of make_npdata.
 
 using Edoke.IO;
@@ -194,17 +194,36 @@ namespace libps3
         /// <summary>
         /// A hash of the first 96 bytes, which are all <see cref="NPD"/> bytes above it.
         /// </summary>
-        private byte[] HeaderHash { get; set; }
+        // Internal so it can be accessed by EDATA for getting SDATA keys and block keys.
+        internal byte[] HeaderHash { get; set; }
 
         /// <summary>
-        /// The date time the content contained within becomes available in milliseconds.
+        /// The date time the content contained within becomes available.
         /// </summary>
-        public ulong ActivateTime { get; set; }
+        public DateTimeOffset ActivateTime
+        {
+            get => DateTimeOffset.FromUnixTimeMilliseconds((long)_ActivateTime);
+            set => _ActivateTime = (ulong)value.ToUnixTimeMilliseconds();
+        }
 
         /// <summary>
-        /// The date time the content within expires in milliseconds.
+        /// The date time the content contained within becomes available expressed as unix milliseconds.
         /// </summary>
-        public ulong ExpireTime { get; set; }
+        private ulong _ActivateTime;
+
+        /// <summary>
+        /// The date time the content within expires.
+        /// </summary>
+        public DateTimeOffset ExpireTime
+        {
+            get => DateTimeOffset.FromUnixTimeMilliseconds((long)_ExpireTime);
+            set => _ExpireTime = (ulong)value.ToUnixTimeMilliseconds();
+        }
+
+        /// <summary>
+        /// The date time the content within expires expressed as unix milliseconds.
+        /// </summary>
+        private ulong _ExpireTime;
 
         #endregion
 
@@ -238,8 +257,8 @@ namespace libps3
             _Digest = br.ReadBytes(DigestSize);
             TitleHash = br.ReadBytes(TitleHashSize);
             HeaderHash = br.ReadBytes(HeaderHashSize);
-            ActivateTime = br.ReadUInt64();
-            ExpireTime = br.ReadUInt64();
+            _ActivateTime = br.ReadUInt64();
+            _ExpireTime = br.ReadUInt64();
         }
 
         /// <summary>
@@ -256,8 +275,8 @@ namespace libps3
             _Digest = br.ReadBytes(DigestSize);
             TitleHash = br.ReadBytes(TitleHashSize);
             HeaderHash = br.ReadBytes(HeaderHashSize);
-            ActivateTime = br.ReadUInt64();
-            ExpireTime = br.ReadUInt64();
+            _ActivateTime = br.ReadUInt64();
+            _ExpireTime = br.ReadUInt64();
         }
 
         #endregion
@@ -344,36 +363,50 @@ namespace libps3
         /// Writes this <see cref="NPD"/> to a <see cref="Stream"/>.
         /// </summary>
         /// <param name="bw">The <see cref="Stream"/> writer.</param>
-        internal void Write(BinaryStreamWriter bw)
+        internal void Write(BinaryStreamWriter bw, bool debug)
         {
             bw.WriteASCII("NPD\0", false);
             bw.WriteInt32(Version);
+            if (debug)
+            {
+                // Fill the rest with 0 when debug
+                bw.WritePattern(120, 0);
+                return;
+            }
+
             bw.WriteInt32((int)License);
             bw.WriteInt32((int)App);
             bw.WriteASCII(_ContentId, 48);
             bw.WriteBytes(_Digest);
             bw.WriteBytes(TitleHash);
             bw.WriteBytes(HeaderHash);
-            bw.WriteUInt64(ActivateTime);
-            bw.WriteUInt64(ExpireTime);
+            bw.WriteUInt64(_ActivateTime);
+            bw.WriteUInt64(_ExpireTime);
         }
 
         /// <summary>
         /// Writes this <see cref="NPD"/> to bytes.
         /// </summary>
         /// <param name="bw">The byte writer.</param>
-        internal void Write(ref BinarySpanWriter bw)
+        internal void Write(ref BinarySpanWriter bw, bool debug)
         {
             bw.WriteASCII("NPD\0", false);
             bw.WriteInt32(Version);
+            if (debug)
+            {
+                // Fill the rest with 0 when debug
+                bw.WritePattern(120, 0);
+                return;
+            }
+            
             bw.WriteInt32((int)License);
             bw.WriteInt32((int)App);
             bw.WriteASCII(_ContentId, 48);
             bw.WriteBytes(_Digest);
             bw.WriteBytes(TitleHash);
             bw.WriteBytes(HeaderHash);
-            bw.WriteUInt64(ActivateTime);
-            bw.WriteUInt64(ExpireTime);
+            bw.WriteUInt64(_ActivateTime);
+            bw.WriteUInt64(_ExpireTime);
         }
 
         /// <summary>
@@ -384,7 +417,7 @@ namespace libps3
         {
             byte[] bytes = new byte[128];
             var bw = new BinarySpanWriter(bytes, true);
-            Write(ref bw);
+            Write(ref bw, false);
             return bytes;
         }
 
@@ -395,43 +428,7 @@ namespace libps3
         public void Write(Stream stream)
         {
             using var bw = new BinaryStreamWriter(stream, true, true);
-            Write(bw);
-        }
-
-        #endregion
-
-        #region Decryption
-
-        internal void GetSdataKey(Span<byte> output)
-            => ByteOperation.Xor(HeaderHash, KeyVault.SDAT_KEY, output);
-
-        /// <summary>
-        /// Calculates a key required to decrypt the specified block.
-        /// </summary>
-        /// <param name="blockIndex">The index of the block to decrypt.</param>
-        /// <param name="output">The output buffer for the block key.</param>
-        internal void GetBlockKey(int blockIndex, Span<byte> output)
-        {
-            if (Version <= 1)
-            {
-                // When version is 1 the first 12 bytes of the block key are 0
-                for (int i = 0; i < 12; i++)
-                    output[i] = 0;
-            }
-            else
-            {
-                // The first 12 bytes of the block key are the first 12 bytes of the header hash
-                for (int i = 0; i < 12; i++)
-                    output[i] = HeaderHash[i];
-            }
-
-            // The last 4 bytes of the block key are the block index
-            var br = new BinarySpanWriter(output, true)
-            {
-                Position = 12
-            };
-
-            br.WriteInt32(blockIndex);
+            Write(bw, false);
         }
 
         #endregion
@@ -502,7 +499,7 @@ namespace libps3
         {
             // Get XOR key
             Span<byte> key = stackalloc byte[KlicenseeSize];
-            ByteOperation.Xor(klicensee, KeyVault.NP_HEADER_OMAC_KEY, key);
+            ByteOperation.Xor(klicensee, KeyVault.NP_HEADER_OMAC_KEY, key, KlicenseeSize);
 
             // Get header bytes
             Span<byte> headerBytes = stackalloc byte[HeaderBytesSize];
@@ -541,7 +538,9 @@ namespace libps3
         }
 
         /// <summary>
-        /// Whether or not the current <see cref="NPD"/> is deemed valid.
+        /// Whether or not the current <see cref="NPD"/> is deemed valid.<br/>
+        /// Does not validate the expiry period of the content.<br/>
+        /// Call <see cref="IsActive"/> to validate the expiry period if desired.
         /// </summary>
         /// <param name="filename">The EDAT file name with the edat extension.</param>
         /// <param name="klicensee">The klicensee for the <see cref="NPD"/>.</param>
@@ -560,6 +559,61 @@ namespace libps3
         {
             HashTitle(filename, TitleHash);
             HashHeader(klicensee, HeaderHash);
+        }
+
+        #endregion
+
+        #region Time Validation
+
+        /// <summary>
+        /// Whether or not the current <see cref="NPD"/> is active in it's expiry period.
+        /// </summary>
+        /// <returns>Whether or not the current <see cref="NPD"/> is active in it's expiry period.</returns>
+        public bool IsActive()
+        {
+            if (HasExpiration())
+            {
+                var now = DateTimeOffset.Now;
+                return now >= ActivateTime && now < ExpireTime;
+            }
+
+            // Not applicable, therefore always active
+            return true;
+        }
+
+        /// <summary>
+        /// Whether or not the expiry period for the current <see cref="NPD"/> reached or passed the activation time.
+        /// </summary>
+        /// <returns>Whether or not the expiry period for the current <see cref="NPD"/> reached or passed the activation time.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ExpiryPeriodStarted()
+            => DateTimeOffset.Now >= ActivateTime;
+
+        /// <summary>
+        /// Whether or not the expiry period for the current <see cref="NPD"/> reached or passed the expiration time.
+        /// </summary>
+        /// <returns>Whether or not the expiry period for the current <see cref="NPD"/> reached or passed the expiration time.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ExpiryPeriodEnded()
+            => DateTimeOffset.Now >= ExpireTime;
+
+        /// <summary>
+        /// Whether or not the current <see cref="NPD"/> has an expiry period.
+        /// </summary>
+        /// <returns>Whether or not the current <see cref="NPD"/> has an expiry period.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasExpiration()
+            => !(_ActivateTime == 0 && _ExpireTime == 0);
+
+        /// <summary>
+        /// Disables the expiry period of the current <see cref="NPD"/>.<br/>
+        /// Set the activation and expiration times to enable the expiry period again.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DisableExpiration()
+        {
+            _ActivateTime = 0;
+            _ExpireTime = 0;
         }
 
         #endregion
