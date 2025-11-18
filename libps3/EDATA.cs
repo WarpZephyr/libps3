@@ -8,7 +8,6 @@ using libps3.Cryptography;
 using libps3.Helpers;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -229,7 +228,7 @@ namespace libps3
             /// <summary>
             /// The data is SDATA and not EDATA.
             /// </summary>
-            Sdata = 1 << 30,
+            Sdata = 1 << 24,
 
             /// <summary>
             /// The data is not finalized.
@@ -390,7 +389,7 @@ namespace libps3
             CheckFlags();
 
             _BlockSize = br.ReadInt32();
-            DataSize = br.ReadInt32();
+            DataSize = br.ReadInt64();
             MetadataHash = br.ReadBytes(16);
             ExtendedHeaderHash = br.ReadBytes(16);
             EcdsaMetadataSignature = br.ReadBytes(40);
@@ -515,7 +514,8 @@ namespace libps3
         /// <returns>A new <see cref="EDATA"/>.</returns>
         public static EDATA Read(string path)
         {
-            using var br = new BinaryStreamReader(path, true);
+            var fs = File.OpenRead(path);
+            using var br = new BinaryStreamReader(fs, true, true);
             return new EDATA(br, false);
         }
 
