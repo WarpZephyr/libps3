@@ -149,9 +149,9 @@ namespace libps3
             get => _ContentId;
             set
             {
-                if (value.Length != ContentIdSize)
+                if (value.Length > ContentIdSize)
                 {
-                    throw new InvalidOperationException($"{nameof(ContentId)} must be {ContentIdSize} bytes in length.");
+                    throw new InvalidOperationException($"{nameof(ContentId)} has a maximum size of {ContentIdSize} bytes in length.");
                 }
 
                 _ContentId = value;
@@ -398,7 +398,7 @@ namespace libps3
                 bw.WritePattern(120, 0);
                 return;
             }
-            
+
             bw.WriteInt32((int)License);
             bw.WriteInt32((int)App);
             bw.WriteASCII(_ContentId, 48);

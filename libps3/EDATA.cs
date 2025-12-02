@@ -325,7 +325,7 @@ namespace libps3
         /// <summary>
         /// A field for <see cref="Footer"/>.
         /// </summary>
-        private string _Footer = string.Empty;
+        private string _Footer;
 
         /// <summary>
         /// Whether or not the <see cref="Footer"/> is present.<br/>
@@ -560,18 +560,21 @@ namespace libps3
             bw.WriteBytes(EcdsaMetadataSignature);
             bw.WriteBytes(EcdsaHeaderSignature);
 
+            if (Data.Position != 0)
+            {
+                if (!Data.CanSeek)
+                {
+                    throw new Exception("Cannot seek encrypted data back to start.");
+                }
+
+                Data.Seek(0, SeekOrigin.Begin);
+            }
+
             Data.CopyTo(bw.BaseStream);
             if (!(!HasFooter && (NPD.Version == 0 || NPD.Version == 1)))
             {
                 bw.WriteASCII(Footer, 16);
             }
-
-            if (!Data.CanSeek)
-            {
-                throw new Exception("Cannot seek encrypted data back to start.");
-            }
-
-            Data.Seek(0, SeekOrigin.Begin);
         }
 
         /// <summary>
@@ -679,26 +682,26 @@ namespace libps3
         /// <summary>
         /// Decrypts a metadata section.
         /// </summary>
-        /// <param name="metadata">The metadata to decrypt.</param>
-        /// <param name="decryptedMetadata">An output for the encrypted metadata.</param>
-        private static void DecryptMetadataSection(ReadOnlySpan<byte> metadata, Span<byte> decryptedMetadata)
+        /// <param name="source">The metadata to decrypt or encrypt.</param>
+        /// <param name="destination">An output for the decrypted or encrypted metadata.</param>
+        private static void DecryptMetadataSection(ReadOnlySpan<byte> source, Span<byte> destination)
         {
-            decryptedMetadata[0] = (byte)(metadata[12] ^ metadata[8] ^ metadata[16]);
-            decryptedMetadata[1] = (byte)(metadata[13] ^ metadata[9] ^ metadata[17]);
-            decryptedMetadata[2] = (byte)(metadata[14] ^ metadata[10] ^ metadata[18]);
-            decryptedMetadata[3] = (byte)(metadata[15] ^ metadata[11] ^ metadata[19]);
-            decryptedMetadata[4] = (byte)(metadata[4] ^ metadata[8] ^ metadata[20]);
-            decryptedMetadata[5] = (byte)(metadata[5] ^ metadata[9] ^ metadata[21]);
-            decryptedMetadata[6] = (byte)(metadata[6] ^ metadata[10] ^ metadata[22]);
-            decryptedMetadata[7] = (byte)(metadata[7] ^ metadata[11] ^ metadata[23]);
-            decryptedMetadata[8] = (byte)(metadata[12] ^ metadata[0] ^ metadata[24]);
-            decryptedMetadata[9] = (byte)(metadata[13] ^ metadata[1] ^ metadata[25]);
-            decryptedMetadata[10] = (byte)(metadata[14] ^ metadata[2] ^ metadata[26]);
-            decryptedMetadata[11] = (byte)(metadata[15] ^ metadata[3] ^ metadata[27]);
-            decryptedMetadata[12] = (byte)(metadata[4] ^ metadata[0] ^ metadata[28]);
-            decryptedMetadata[13] = (byte)(metadata[5] ^ metadata[1] ^ metadata[29]);
-            decryptedMetadata[14] = (byte)(metadata[6] ^ metadata[2] ^ metadata[30]);
-            decryptedMetadata[15] = (byte)(metadata[7] ^ metadata[3] ^ metadata[31]);
+            destination[0] = (byte)(source[12] ^ source[8] ^ source[16]);
+            destination[1] = (byte)(source[13] ^ source[9] ^ source[17]);
+            destination[2] = (byte)(source[14] ^ source[10] ^ source[18]);
+            destination[3] = (byte)(source[15] ^ source[11] ^ source[19]);
+            destination[4] = (byte)(source[4] ^ source[8] ^ source[20]);
+            destination[5] = (byte)(source[5] ^ source[9] ^ source[21]);
+            destination[6] = (byte)(source[6] ^ source[10] ^ source[22]);
+            destination[7] = (byte)(source[7] ^ source[11] ^ source[23]);
+            destination[8] = (byte)(source[12] ^ source[0] ^ source[24]);
+            destination[9] = (byte)(source[13] ^ source[1] ^ source[25]);
+            destination[10] = (byte)(source[14] ^ source[2] ^ source[26]);
+            destination[11] = (byte)(source[15] ^ source[3] ^ source[27]);
+            destination[12] = (byte)(source[4] ^ source[0] ^ source[28]);
+            destination[13] = (byte)(source[5] ^ source[1] ^ source[29]);
+            destination[14] = (byte)(source[6] ^ source[2] ^ source[30]);
+            destination[15] = (byte)(source[7] ^ source[3] ^ source[31]);
         }
 
         /// <summary>
@@ -809,7 +812,7 @@ namespace libps3
             Span<byte> hash = stackalloc byte[20];
             Span<byte> metadata = stackalloc byte[32];
             Span<byte> decryptedMetadata = stackalloc byte[16];
-            var mbr = new BinarySpanReader(decryptedMetadata);
+            var mbr = new BinarySpanReader(decryptedMetadata, true);
             for (int blockIndex = 0; blockIndex < numBlocks; blockIndex++)
             {
                 // Decrypt metadata
@@ -849,7 +852,7 @@ namespace libps3
                 else if (isUnk5)
                 {
                     // Go to metadata
-                    // Metadata is before each data block if flag 5 is set
+                    // Metadata is before each data block
                     br.Position = (long)blockIndex * (metadataSectionSize + BlockSize);
 
                     // Read the 32 bytes of metadata
@@ -975,8 +978,78 @@ namespace libps3
 
         #region Encrypt
 
-        public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input, Stream output, bool leaveOpen)
+        /// <summary>
+        /// Encrypts either a key or a hash.
+        /// </summary>
+        /// <param name="keyHash">The key or hash to encrypt.</param>
+        private void EncryptKeyHash(Span<byte> keyHash)
         {
+            if (IsKeyEncrypted())
+            {
+                var encryptionKey = KeyVault.EDAT_KEY_0;
+                if (NPD.Version == 4)
+                {
+                    encryptionKey = KeyVault.EDAT_KEY_1;
+                }
+
+                AesCrypto.DecryptCbc(keyHash, encryptionKey, KeyVault.EDAT_IV);
+            }
+        }
+
+        /// <summary>
+        /// Encrypts the specified data with the specified parameters.
+        /// </summary>
+        /// <param name="key">The key to encrypt with.</param>
+        /// <param name="iv">The IV to encrypt with.</param>
+        /// <param name="hashKey">The key to encrypt the hash with.</param>
+        /// <param name="hashResult">The buffer to store the encrypted data hash result in.</param>
+        /// <param name="data">The data to encrypt.</param>
+        /// <param name="isPlaintext">Whether or not the data is plaintext.</param>
+        /// <param name="isUnk4">Whether or not the <see cref="EdataFlags.UNK_4"/> flag was set.</param>
+        /// <returns>Whether or not the correct number of bytes were encrypted.</returns>
+        private bool EncryptData(Span<byte> key, Span<byte> iv, Span<byte> hashKey, Span<byte> hashResult, Span<byte> data, bool isPlaintext, bool isUnk4)
+        {
+            // Encrypt the key and hash
+            EncryptKeyHash(key);
+            EncryptKeyHash(hashKey);
+
+            // Encrypt the block data
+            bool result;
+            if (!isPlaintext)
+            {
+                result = AesCrypto.EncryptCbc(data, key, iv) == data.Length;
+            }
+            else
+            {
+                result = true;
+            }
+
+            // Generate hash for the encrypted data
+            if (!isUnk4) // AES-CMAC-128
+            {
+                AesHash.ComputeAesCmac(hashKey, data, hashResult);
+            }
+            else // SHA1-HMAC 128 or 160
+            {
+                ShaHash.ComputeSha1Hmac(hashKey, data, hashResult);
+            }
+
+            return result;
+        }
+
+        public void Encrypt(ReadOnlySpan<char> filename, ReadOnlySpan<byte> klicensee, ReadOnlySpan<byte> rap, Stream input)
+        {
+            var output = Data;
+            if (output.Position != 0)
+            {
+                if (!output.CanSeek)
+                {
+                    throw new Exception("Cannot seek data output back to start for encrypting.");
+                }
+
+                output.Seek(0, SeekOrigin.Begin);
+            }
+
             // Ensure flags and version are usable without secretly modifying user state.
             // Notify the user to fix their errors before continuing.
             CheckFlags();
@@ -988,24 +1061,46 @@ namespace libps3
             Span<byte> key = stackalloc byte[KeySize];
             GetCryptoKey(filename, klicensee, rap, key);
 
-            // Write a placeholder for the header for now
-            Span<byte> edataHeader = stackalloc byte[EdataHeaderSize];
-            output.Write(edataHeader);
+            // Check flags
+            bool isDebug = IsDebug();
+            bool isCompressed = IsCompressed();
+            bool isPlaintext = IsPlaintext();
+            bool isUnk2 = (Flags & EdataFlags.UNK_2) != 0;
+            bool isKeyEncrypted = IsKeyEncrypted();
+            bool isUnk4 = (Flags & EdataFlags.UNK_4) != 0;
+            bool isUnk5 = (Flags & EdataFlags.UNK_5) != 0;
 
             // Calculate sizes
             int numBlocks = (int)((dataSize + BlockSize - 1) / BlockSize);
 
+            // Calculate IV
+            bool isOldNpd = NPD.Version <= 1;
+            Span<byte> iv = stackalloc byte[16];
+            if (!isOldNpd) // NPD versions 1 and below have an empty IV
+                NPD.Digest.CopyTo(iv);
+
+            // Setup buffer for metadata hash to be made easier later
+            int metadataSectionSize = (isCompressed || isUnk5) ? 32 : 16;
+            byte[] metadataBytes = new byte[metadataSectionSize * numBlocks];
+            Span<byte> metadataBytesSpan = metadataBytes.AsSpan();
+            var mhbw = new BinarySpanWriter(metadataBytesSpan, true);
+
             // Encrypt data and generate metadata
             int length = 0;
             long offset = 0;
+            Span<byte> blockBuffer = stackalloc byte[BlockSize];
+            Span<byte> blockKey = stackalloc byte[16];
+            Span<byte> encBlockKey = stackalloc byte[16];
+            Span<byte> hashKey = stackalloc byte[16];
+            Span<byte> hashResult = stackalloc byte[20];
+            Span<byte> metadata = stackalloc byte[32];
+            Span<byte> encryptedMetadata = stackalloc byte[32];
+            var mbw = new BinarySpanWriter(metadata, true);
             for (int blockIndex = 0; blockIndex < numBlocks; blockIndex++)
             {
                 // Get the offset and length of the current block
                 offset = blockIndex * BlockSize;
                 length = BlockSize;
-
-                int blockLength = length;
-                length = (blockLength + 15) & -16; // We need to pad to the nearest 16 byte fixed AES block.
 
                 // If we are on the last block and it is not perfectly fit to a blocksize, use it's remaining length as the length.
                 bool isLastBlock = blockIndex == numBlocks - 1;
@@ -1013,19 +1108,237 @@ namespace libps3
                 if (isLastBlock && blocksRemainder > 0)
                     length = blocksRemainder;
 
+                int blockLength = length; // Store the actual length this block will be
+                length = (blockLength + 15) & -16; // We need to pad to the nearest 16 byte fixed AES block.
 
+                // Read the original block data
+                Span<byte> data = blockBuffer[..length]; // We need the buffer padded to 16 for AES
+                input.ReadExactly(data[..blockLength]); // But we only need to read what is required from the stream
+
+                // Generate a block key
+                GetBlockKey(blockIndex, blockKey);
+
+                // Encrypt the block key
+                AesCrypto.EncryptEcb(blockKey, key, encBlockKey);
+
+                // Get the hash or hash key
+                if (isUnk4)
+                    AesCrypto.EncryptEcb(encBlockKey, key, hashKey); // Encrypt again if flag 4 is set
+                else
+                    encBlockKey.CopyTo(hashKey); // Use the encrypted block key as the hash
+
+                // Encrypt in-place if necessary
+                if (!isDebug)
+                {
+                    if (!EncryptData(encBlockKey, iv, hashKey, hashResult, data, isPlaintext, isUnk4))
+                    {
+                        throw new Exception($"Decryption of block {blockIndex} failed.");
+                    }
+                }
+
+                // Build the metadata sections and write the blocks with them
+                const int metadataStartOffset = 256;
+                if (isCompressed)
+                {
+                    // Prepare offsets
+                    const int metadataSize = 32;
+                    const int metadataHashSize = 16;
+                    long dataOffset = ((long)blockIndex * BlockSize) + ((long)numBlocks * metadataSize);
+                    long metadataOffset = (long)blockIndex * metadataSize;
+
+                    // Write to the metadata buffer
+                    mbw.Position = 0;
+                    mbw.WriteByteSpan(hashResult[..metadataHashSize]);
+                    mbw.WriteInt64(dataOffset + metadataStartOffset);
+                    mbw.WriteInt32(blockLength);
+                    mbw.WriteInt32(0); // compression end
+
+                    // Encrypt metadata
+                    if (isOldNpd)
+                    {
+                        // Metadata section is not encrypted for version 1
+                        metadata.CopyTo(encryptedMetadata);
+                    }
+                    else
+                    {
+                        metadata[..metadataHashSize].CopyTo(encryptedMetadata);
+                        DecryptMetadataSection(metadata, encryptedMetadata[metadataHashSize..]);
+                    }
+
+                    // Write metadata
+                    output.Seek(metadataOffset, SeekOrigin.Begin);
+                    if (IsDebug())
+                    {
+                        // Write an empty metadata section if debug
+                        for (int i = 0; i < metadataSize; i++)
+                            encryptedMetadata[i] = 0;
+
+                        output.Write(encryptedMetadata);
+                    }
+                    else
+                    {
+                        output.Write(encryptedMetadata);
+                    }
+
+                    // Copy metadata to metadata buffer for metadata hash later
+                    encryptedMetadata.CopyTo(metadataBytesSpan[mhbw.Position..]);
+                    mhbw.Position += metadataSize;
+
+                    // Write data
+                    output.Seek(dataOffset, SeekOrigin.Begin);
+                    output.Write(data[..length]);
+                }
+                else if (isUnk5)
+                {
+                    // Prepare offsets
+                    const int metadataSize = 32;
+                    long dataOffset = ((long)blockIndex * BlockSize) + (((long)blockIndex + 1) * metadataSize);
+                    long metadataOffset = ((long)blockIndex * metadataSize) + offset;
+
+                    // Prepare buffers
+                    Span<byte> hashResult1 = metadata[..16];
+                    Span<byte> hashResult2 = metadata[16..];
+
+                    // XOR metadata
+                    StaticRandom.Random.NextBytes(hashResult2); // Use a fake XOR value
+                    hashResult[16..].CopyTo(hashResult2); // Copy the last 4 bytes of the 20 byte hash result
+
+                    for (int i = 0; i < 16; i++)
+                        hashResult1[i] = (byte)(hashResult[i] ^ hashResult2[i]); // Apply XOR
+
+                    // Metadata buffer is already filled with hashResult1 and hashResult2
+                    // Write metadata
+                    output.Seek(metadataOffset, SeekOrigin.Begin);
+                    if (IsDebug())
+                    {
+                        // Write an empty metadata section if debug
+                        for (int i = 0; i < metadataSize; i++)
+                            metadata[i] = 0;
+
+                        output.Write(metadata);
+                    }
+                    else
+                    {
+                        output.Write(metadata);
+                    }
+
+                    // Copy metadata to metadata buffer for metadata hash later
+                    metadata.CopyTo(metadataBytesSpan[mhbw.Position..]);
+                    mhbw.Position += metadataSize;
+
+                    // Write data
+                    output.Seek(dataOffset, SeekOrigin.Begin);
+                    output.Write(data[..length]);
+                }
+                else
+                {
+                    // Prepare offsets
+                    const int metadataSize = 16;
+                    long dataOffset = ((long)blockIndex * BlockSize) + ((long)numBlocks * metadataSize);
+                    long metadataOffset = (long)blockIndex * metadataSize;
+
+                    // Write metadata
+                    output.Seek(metadataOffset, SeekOrigin.Begin);
+                    if (IsDebug())
+                    {
+                        // Write an empty metadata section if debug
+                        for (int i = 0; i < metadataSize; i++)
+                            hashResult[i] = 0;
+
+                        output.Write(hashResult[..metadataSize]);
+                    }
+                    else
+                    {
+                        output.Write(hashResult[..metadataSize]);
+                    }
+
+                    // Copy metadata to metadata buffer for metadata hash later
+                    hashResult[..metadataSize].CopyTo(metadataBytesSpan[mhbw.Position..]);
+                    mhbw.Position += metadataSize;
+
+                    // Write data
+                    output.Seek(dataOffset, SeekOrigin.Begin);
+                    output.Write(data[..length]);
+                }
             }
 
             // Update these last
-
             // These hashes aren't exposed to the user anyhow, so updating here should be fine.
             // However, validation is, so we expose a way to update them.
+            // Update NPD hashes
             NPD.Update(filename, klicensee);
 
-            // Set the length of the soon to be new data
+            // Set the length of the new data before updating hashes
             DataSize = dataSize;
 
-            throw new NotImplementedException("Encryption is not yet implemented.");
+            // Update EDATA hashes
+            UpdateHashes(key, metadataBytesSpan);
+        }
+
+        private void UpdateHashes(Span<byte> key, Span<byte> metadata)
+        {
+            // Prepare buffers
+            Span<byte> extendedHeader = stackalloc byte[160];
+            Span<byte> empty = stackalloc byte[16];
+            Span<byte> hashKey = stackalloc byte[16];
+            Span<byte> metadataHash = MetadataHash;
+            Span<byte> extendedHeaderHash = ExtendedHeaderHash;
+            key.CopyTo(hashKey);
+
+            // Update metadata hash first
+            EncryptData(empty, empty, hashKey, metadataHash, metadata, true, false);
+            key.CopyTo(hashKey);
+
+            // Then update the extended header hash
+            WriteHeaderBytes(extendedHeader);
+            EncryptData(empty, empty, hashKey, extendedHeaderHash, extendedHeader, true, false);
+
+            // Update the ECDSA hashes with random data for now
+            StaticRandom.Random.NextBytes(EcdsaMetadataSignature);
+            StaticRandom.Random.NextBytes(EcdsaHeaderSignature);
+        }
+
+        /// <summary>
+        /// Write the <see cref="NPD"/> header bytes.
+        /// </summary>
+        /// <param name="output">The buffer to output the header bytes into.</param>
+        private void WriteHeaderBytes(Span<byte> output)
+        {
+            var bw = new BinarySpanWriter(output, true);
+            bool isDebug = IsDebug();
+
+            NPD.Write(ref bw, isDebug);
+            bw.WriteInt32((int)Flags);
+            bw.WriteInt32(_BlockSize);
+            bw.WriteInt64(DataSize);
+            if (isDebug)
+                bw.WritePattern(16, 0);
+            else
+                bw.WriteBytes(MetadataHash);
+        }
+
+        #endregion
+
+        #region Data Helpers
+
+        /// <summary>
+        /// Set the underlying data stream to a new stream for encrypting.
+        /// </summary>
+        /// <param name="data">The new stream.</param>
+        /// <param name="leaveOldOpen">Whether or not to leave the old stream open.</param>
+        public void SetData(Stream data, bool leaveOldOpen = false)
+        {
+            if (data.Position != 0)
+            {
+                throw new Exception("Data stream should start at position 0.");
+            }
+
+            if (!leaveOldOpen)
+            {
+                Data.Dispose();
+            }
+
+            Data = data;
         }
 
         #endregion
